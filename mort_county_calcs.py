@@ -225,92 +225,92 @@ age_with_mortality_data_chicago = age_with_mortality_data.loc[age_with_mortality
 
 
 
-# ------------------------------------------------------------------------------
-# County Level Concentrations
-# ------------------------------------------------------------------------------
-import geopandas as gpd
+# # ------------------------------------------------------------------------------
+# # County Level Concentrations
+# # ------------------------------------------------------------------------------
+# import geopandas as gpd
 
-def tract_to_county_pm25(tracts_gdf, counties_gdf, pm_col="TotalPM25_tract"):
-    """
-    Convert one tract-level PM2.5 GeoDataFrame to county-level
-    area-weighted averages.
-    """
-    tracts = tracts_gdf.copy()
-    counties = counties_gdf.copy()
+# def tract_to_county_pm25(tracts_gdf, counties_gdf, pm_col="TotalPM25_tract"):
+#     """
+#     Convert one tract-level PM2.5 GeoDataFrame to county-level
+#     area-weighted averages.
+#     """
+#     tracts = tracts_gdf.copy()
+#     counties = counties_gdf.copy()
 
-    # Match CRS
-    tracts = tracts.to_crs(counties.crs)
+#     # Match CRS
+#     tracts = tracts.to_crs(counties.crs)
 
-    # Project for area calculations
-    projected_crs = "EPSG:26971"
-    tracts = tracts.to_crs(projected_crs)
-    counties = counties.to_crs(projected_crs)
+#     # Project for area calculations
+#     projected_crs = "EPSG:26971"
+#     tracts = tracts.to_crs(projected_crs)
+#     counties = counties.to_crs(projected_crs)
 
-    counties = counties[['GEOID', 'NAME', 'geometry']].rename(
-        columns={
-            'GEOID': 'county_geoid',
-            'NAME': 'county_name'
-        }
-    )
+#     counties = counties[['GEOID', 'NAME', 'geometry']].rename(
+#         columns={
+#             'GEOID': 'county_geoid',
+#             'NAME': 'county_name'
+#         }
+#     )
 
-    # Intersect tracts with counties
-    intersections = gpd.overlay(
-        tracts[[pm_col, 'geometry']],
-        counties,
-        how='intersection'
-    )
+#     # Intersect tracts with counties
+#     intersections = gpd.overlay(
+#         tracts[[pm_col, 'geometry']],
+#         counties,
+#         how='intersection'
+#     )
 
-    intersections['overlap_area'] = intersections.geometry.area
-    intersections['weighted_pm25'] = (
-        intersections[pm_col] * intersections['overlap_area']
-    )
+#     intersections['overlap_area'] = intersections.geometry.area
+#     intersections['weighted_pm25'] = (
+#         intersections[pm_col] * intersections['overlap_area']
+#     )
 
-    # Aggregate
-    county_pm25 = (
-        intersections.groupby(['county_geoid', 'county_name'])
-        .agg(
-            total_weighted_pm25=('weighted_pm25', 'sum'),
-            total_area=('overlap_area', 'sum')
-        )
-        .reset_index()
-    )
+#     # Aggregate
+#     county_pm25 = (
+#         intersections.groupby(['county_geoid', 'county_name'])
+#         .agg(
+#             total_weighted_pm25=('weighted_pm25', 'sum'),
+#             total_area=('overlap_area', 'sum')
+#         )
+#         .reset_index()
+#     )
 
-    county_pm25['area_avg_PM25'] = (
-        county_pm25['total_weighted_pm25'] /
-        county_pm25['total_area']
-    )
+#     county_pm25['area_avg_PM25'] = (
+#         county_pm25['total_weighted_pm25'] /
+#         county_pm25['total_area']
+#     )
 
-    # Merge back to counties
-    county_gdf = counties.merge(
-        county_pm25[['county_geoid', 'area_avg_PM25']],
-        on='county_geoid',
-        how='left'
-    )
+#     # Merge back to counties
+#     county_gdf = counties.merge(
+#         county_pm25[['county_geoid', 'area_avg_PM25']],
+#         on='county_geoid',
+#         how='left'
+#     )
 
-    return county_gdf.to_crs(counties_gdf.crs)
+#     return county_gdf.to_crs(counties_gdf.crs)
 
-conc_county_gdfs_dict = {}
+# conc_county_gdfs_dict = {}
 
-for scenario, inventory_dict in conc_census_gdfs_dict.items():
-    conc_county_gdfs_dict[scenario] = {}
+# for scenario, inventory_dict in conc_census_gdfs_dict.items():
+#     conc_county_gdfs_dict[scenario] = {}
 
-    for inventory, gdf in inventory_dict.items():
-        conc_county_gdfs_dict[scenario][inventory] = tract_to_county_pm25(
-            gdf,
-            chicago_counties_gdf
-        )
+#     for inventory, gdf in inventory_dict.items():
+#         conc_county_gdfs_dict[scenario][inventory] = tract_to_county_pm25(
+#             gdf,
+#             chicago_counties_gdf
+#         )
 
 
-import pickle
-output_dir = "shapefiles/rerun"
+# import pickle
+# output_dir = "shapefiles/rerun"
 
-#Save inmap grids
-with open(f"{output_dir}/conc_county_gdfs_dict.pkl", "wb") as f:
-    pickle.dump(conc_county_gdfs_dict, f)
+# #Save inmap grids
+# with open(f"{output_dir}/conc_county_gdfs_dict.pkl", "wb") as f:
+#     pickle.dump(conc_county_gdfs_dict, f)
     
 
 # ------------------------------------------------------------------------------
-# County Level BMRs and population
+# County-averaged BMRs, per census tract (population stays at tract level)
 # ------------------------------------------------------------------------------
 df = age_with_mortality_data_chicago.copy()
 
@@ -320,16 +320,12 @@ df["county_gisjoin"] = df["GISJOIN"].str[1:3] + df["GISJOIN"].str[4:7]
 population_cols = [col for col in df.columns if col.endswith("_population")]
 mortality_cols = [col for col in df.columns if col.endswith("_mortality")]
 
-county_rows = []
+county_mortality_rows = []
 
 for county, group in df.groupby("county_gisjoin"):
     result = {"county_gisjoin": county}
 
-    # sum population columns
-    for col in population_cols:
-        result[col] = group[col].sum()
-
-    # population-weighted mortality averages
+    # population-weighted mortality averages (computed at county level)
     for mort_col in mortality_cols:
         pop_col = mort_col.replace("_mortality", "_population")
 
@@ -341,41 +337,68 @@ for county, group in df.groupby("county_gisjoin"):
         else:
             result[mort_col] = None
 
-    county_rows.append(result)
+    county_mortality_rows.append(result)
 
-county_age_mortality = pd.DataFrame(county_rows)
+county_mortality_only = pd.DataFrame(county_mortality_rows)
+
+# ------------------------------------------------------------------------------
+# Attach county-averaged mortality rates back onto every tract,
+# keeping each tract's own population columns
+# ------------------------------------------------------------------------------
+tract_pop_county_bmr = pd.merge(
+    df[["GISJOIN", "county_gisjoin"] + population_cols],
+    county_mortality_only,
+    on="county_gisjoin",
+    how="left"
+)
 
 
 ###
-###  Compute mortality * population for each age bin over 30
+### Compute mortality * population for each age bin over 30, by census tract
+### (using tract-level population but county-averaged mortality rates)
 ###
 age_bins = ['30-34', '35-39', '40-44', '45-49', '50-54', '55-59',
             '60-64', '65-69', '70-74', '75-79', '80-84']#, '85+']
 
 # Initialize a list to store the results
-baseline_mortality_rates_county = []
+baseline_mortality_rates_tract = []
 
 # Iterate over each GISJOIN census tract
-for _, row in county_age_mortality.iterrows():
-    print(row)
-    total_population = row[[col + '_population' for col in age_bins]].sum()  # Sum of population for all age bins. ig this is ineffiicent but im not changing it now :(
-    total_mortality = sum(row[age_bin + '_mortality'] * row[age_bin + '_population'] for age_bin in age_bins)  # Sum of mortality rate * population for each tract
-    overall_mortality_rate = total_mortality / total_population if total_population != 0 else 0  # Avoid division by zero (not sure if there are any zero pop, but leavin it)
-    baseline_mortality_rates_county.append({
+for _, row in tract_pop_county_bmr.iterrows():
+    total_population = row[[col + '_population' for col in age_bins]].sum()
+    total_mortality = sum(row[age_bin + '_mortality'] * row[age_bin + '_population'] for age_bin in age_bins)
+    overall_mortality_rate = total_mortality / total_population if total_population != 0 else 0
+    baseline_mortality_rates_tract.append({
+        "GISJOIN": row["GISJOIN"],
         "county_gisjoin": row["county_gisjoin"],
-       # 'GEOID': row["GEOID"],
-       # 'geometry': row['geometry'],
         "total_population": total_population,
         "total_mortality": total_mortality,
         "overall_mortality_rate": overall_mortality_rate
     })
 
-baseline_mortality_rates_county = pd.DataFrame(baseline_mortality_rates_county)
+baseline_mortality_rates_tract = pd.DataFrame(baseline_mortality_rates_tract)
 
 
 # ------------------------------------------------------------------------------
 # County Level mortality calculations
 # ------------------------------------------------------------------------------
+
+def make_gisjoin_from_fips(df):
+    df["STATEFP"] = df["STATEFP"].astype(str).str.zfill(2)
+    df["COUNTYFP"] = df["COUNTYFP"].astype(str).str.zfill(3)
+    df["TRACTCE"] = df["TRACTCE"].astype(str).str.zfill(6)
+
+    df["GISJOIN"] = (
+        "G"
+        + df["STATEFP"]
+        + "0"
+        + df["COUNTYFP"]
+        + "0"
+        + df["TRACTCE"]
+    )
+    
+    return df
+
 
 def mortality_function(pm_mortality_data_df, pollution_col = "TotalPM25_tract", hazard_ratio = 1.08, unit = 10):
 	pm_mortality_data_df = pm_mortality_data_df.copy(deep = True) # full copy so changes don't happen to the inputted df
@@ -398,38 +421,35 @@ def mortality_function(pm_mortality_data_df, pollution_col = "TotalPM25_tract", 
 	print("RR:", hazard_ratio, " - ", round(pm_mortality_data_df['Attributable_Mortality'].sum()))
 	return pm_mortality_data_df, pm_mortality_data_df[['Attributable_Mortality', 'Attributable_Mortality_Rate']]
 
-
-
 # Dictionary to store tract-level outputs
-attributable_mortality_dict_county = {}
+attributable_mortality_dict_tract = {}
 
 summary_results = []
 
-for res in conc_county_gdfs_dict.keys():
-    attributable_mortality_dict_county[res] = {}
-    for inv in conc_county_gdfs_dict[res].keys():
+for res in conc_census_gdfs_dict.keys():
+    attributable_mortality_dict_tract[res] = {}
+    for inv in conc_census_gdfs_dict[res].keys():
 
-        # --- Pollution ---
-        pollution_df = conc_county_gdfs_dict[res][inv]
+        # --- Pollution (tract-level) ---
+        pollution_df = conc_census_gdfs_dict[res][inv]
+        pollution_df = make_gisjoin_from_fips(pollution_df)
 
         pollution_with_bmrs = pd.merge(
             pollution_df,
-            baseline_mortality_rates_county,
-            left_on="county_geoid",
-            right_on="county_gisjoin",
+            baseline_mortality_rates_tract,
+            on="GISJOIN",
             how="inner"
         )
 
-        mortality, _ = mortality_function(pollution_with_bmrs, pollution_col = "area_avg_PM25", hazard_ratio = 1.03, unit = 5)
+        mortality, _ = mortality_function(pollution_with_bmrs, pollution_col="TotalPM25_tract", hazard_ratio=1.03, unit=5)
         mortality.rename(columns={'Attributable_Mortality': 'PM_Attributable_Mortality', 'Attributable_Mortality_Rate': 'PM_Attributable_Mortality_Rate'}, inplace=True)
-        _, mortality[['PM_Attributable_Mortality_lower', 'PM_Attributable_Mortality_Rate_lower']] = mortality_function(pollution_with_bmrs, pollution_col = "area_avg_PM25", hazard_ratio = 1.01, unit = 5)
-        _, mortality[['PM_Attributable_Mortality_upper', 'PM_Attributable_Mortality_Rate_upper']] = mortality_function(pollution_with_bmrs, pollution_col = "area_avg_PM25", hazard_ratio = 1.04, unit = 5)
-
+        _, mortality[['PM_Attributable_Mortality_lower', 'PM_Attributable_Mortality_Rate_lower']] = mortality_function(pollution_with_bmrs, pollution_col="TotalPM25_tract", hazard_ratio=1.01, unit=5)
+        _, mortality[['PM_Attributable_Mortality_upper', 'PM_Attributable_Mortality_Rate_upper']] = mortality_function(pollution_with_bmrs, pollution_col="TotalPM25_tract", hazard_ratio=1.04, unit=5)
 
         # -------------------------------------------------
         # Store tract-level outputs in dictionary
         # -------------------------------------------------
-        attributable_mortality_dict_county[res][inv] = mortality
+        attributable_mortality_dict_tract[res][inv] = mortality
 
         # -------------------------------------------------
         # Summed totals for table
@@ -454,5 +474,17 @@ final_table_pivot = final_table.pivot(
     columns="Res",
     values="PM_Mortality"
 ).reset_index()
-final_table_pivot.to_csv("county_mortality_summary_table.csv")
+
+
+final_table_pivot.to_csv("county_mortality_summary_table_2.csv")
 final_table_pivot
+
+
+
+import pickle
+output_dir = "shapefiles/rerun"
+
+#Save inmap grids
+with open(f"{output_dir}/mortalities_dfs_county.pkl", "wb") as f:
+    pickle.dump(attributable_mortality_dict_tract, f)
+
