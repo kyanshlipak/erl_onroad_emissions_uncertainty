@@ -10,6 +10,12 @@ Compute attributable mortality calculations using only county-level baseline mor
 ## mortality_calcs.py
 Compute attributable mortality calculations at the census tract level.
 
+## prep_for_comparison.py
+Prep data from Visa et al. for comparison with InMAP simulated data at 1.3 km.
+
+## secondary_pm_processing,py
+Processing outputs from simulations with additional secondary PM2.5 precursors for a sensitivity analysis. Actual comparison figures and stats are done in spatial_plots.ipynb.
+
 ## spatial_plots.ipynb
 Make figures! All the tables and figures in the main text and SI came from here.
 
